@@ -117,7 +117,7 @@ class ViTPatchGenerator(nn.Module):
         ]
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-        if self.abs_pos:
+        if self.abs_pos and f'{prefix}pos_embed' in state_dict:
             self._load_embed(state_dict[f'{prefix}pos_embed'], self.pos_embed)
 
     def _load_embed(self, src_embed: torch.Tensor, targ_embed: nn.Parameter):
@@ -284,16 +284,16 @@ class ViTPatchLinear(nn.Linear):
         self.patch_size = patch_size
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-        if self.bias is not None:
+        if self.bias is not None and f'{prefix}bias' in state_dict:
             self.bias.data.copy_(state_dict[f'{prefix}bias'])
+        if f'{prefix}weight' in state_dict:
+            chk_weight = state_dict[f'{prefix}weight']
+            if chk_weight.shape != self.weight.shape:
+                src_patch_size = int(math.sqrt(chk_weight.shape[1] // 3))
 
-        chk_weight = state_dict[f'{prefix}weight']
-        if chk_weight.shape != self.weight.shape:
-            src_patch_size = int(math.sqrt(chk_weight.shape[1] // 3))
+                assert (src_patch_size ** 2) * 3 == chk_weight.shape[1], 'Unable to interpolate non-square patch size'
 
-            assert (src_patch_size ** 2) * 3 == chk_weight.shape[1], 'Unable to interpolate non-square patch size'
-
-            chk_weight = rearrange(chk_weight, 'b (c h w) -> b c h w', c=3, h=src_patch_size, w=src_patch_size)
-            chk_weight = F.interpolate(chk_weight, size=(self.patch_size, self.patch_size), mode='bicubic', align_corners=True, antialias=False)
-            chk_weight = rearrange(chk_weight, 'b c h w -> b (c h w)')
-        self.weight.data.copy_(chk_weight)
+                chk_weight = rearrange(chk_weight, 'b (c h w) -> b c h w', c=3, h=src_patch_size, w=src_patch_size)
+                chk_weight = F.interpolate(chk_weight, size=(self.patch_size, self.patch_size), mode='bicubic', align_corners=True, antialias=False)
+                chk_weight = rearrange(chk_weight, 'b c h w -> b (c h w)')
+            self.weight.data.copy_(chk_weight)

@@ -118,7 +118,7 @@ class RADIOModel(nn.Module):
                              '`self.get_nearest_supported_resolution(<height>, <width>) is provided as a convenience API. '
                              f'Input: {x.shape[-2:]}, Nearest: {self.get_nearest_supported_resolution(*x.shape[-2:])}')
 
-        x = self.input_conditioner(x)
+        x = self.input_conditioner(x).to(x)
         y = self.model.forward_features(x)
 
         if isinstance(self.model, VisionTransformer):
@@ -149,8 +149,8 @@ class RADIOModel(nn.Module):
         else:
             raise ValueError("Unsupported model type")
 
-        all_feat = all_feat.float()
-        ret = RadioOutput(bb_summary.flatten(1), all_feat).to(torch.float32)
+        # all_feat = all_feat.float()
+        ret = RadioOutput(bb_summary.flatten(1), all_feat)  # .to(torch.float32)
         if self.adaptors:
             ret = dict(backbone=ret)
             for name, adaptor in self.adaptors.items():
@@ -158,8 +158,9 @@ class RADIOModel(nn.Module):
                     summary = all_summary[:, adaptor.head_idx]
                 else:
                     summary = all_summary
-                ada_input = AdaptorInput(images=x, summary=summary.float(), features=all_feat)
-                v = adaptor(ada_input).to(torch.float32)
+                ada_input = AdaptorInput(images=x, summary=summary,  # .float(),
+                                         features=all_feat)
+                v = adaptor(ada_input)  # .to(torch.float32)
                 ret[name] = v
 
         return ret
